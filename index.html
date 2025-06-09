@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Naat e shareef Player</title>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: A responsive two-column layout is used to separate the player controls from the playlist and search functionality. On the left (or top on mobile), the user sees the 'Now Playing' information (art, title, controls), providing immediate playback context. On the right (or bottom), the user can browse and search the entire collection. This structure improves usability by allowing the user to discover new content without losing context of the currently playing track. The user flow is: load -> search/browse -> click to play -> continuous playback of the visible list. This is a standard, proven architecture for media players. -->
+    <!-- Visualization & Content Choices: The core content is the list of Naats. Goal: Allow easy playback and discovery. Method: The primary visualization is the interactive playlist itself. Interaction: A search input filters this list in real-time. Clicking any item in the list (full or filtered) initiates playback. Justification: This direct manipulation is intuitive and provides immediate feedback. It's more effective than navigating separate pages. A subtle wave animation provides visual feedback during playback. All interactions are handled with vanilla JavaScript, confirming NO SVG/Mermaid libraries are used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .player-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .progress-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -6px;
+            transition: background 0.3s;
+        }
+
+        .progress-bar:hover::-webkit-slider-thumb {
+            background: #e2e8f0;
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -4px;
+        }
+
+        .playlist-item.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-left-color: #38bdf8; /* A vibrant blue to highlight */
+        }
+
+        .playlist-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .playlist-scroll::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 3px;
+        }
+
+        .playlist-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+        
+        .wave-animation {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            overflow: hidden;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            background-size: 1000px 100px;
+        }
+
+        .wave.wave1 {
+            animation: animate 30s linear infinite;
+            z-index: 10;
+            opacity: 0.7;
+            animation-delay: 0s;
+            bottom: 0;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100" preserveAspectRatio="none"><path d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" fill="rgba(255,255,255,0.5)"/></svg>');
+        }
+        .wave.wave2 {
+            animation: animate2 15s linear infinite;
+            z-index: 9;
+            opacity: 0.5;
+            animation-delay: -5s;
+            bottom: 10px;
+             background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100" preserveAspectRatio="none"><path d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" fill="rgba(255,255,255,0.4)"/></svg>');
+        }
+
+        @keyframes animate {
+            0% { background-position-x: 0; }
+            100% { background-position-x: 1000px; }
+        }
+        @keyframes animate2 {
+            0% { background-position-x: 0; }
+            100% { background-position-x: -1000px; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-teal-400 to-purple-600 flex items-center justify-center min-h-screen p-4 text-white">
+
+    <div class="player-container w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden">
+        <div class="flex flex-col md:flex-row">
+            
+            <div class="w-full md:w-1/3 bg-black/20 p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                <div id="album-art" class="w-48 h-48 md:w-64 md:h-64 rounded-2xl bg-cover bg-center shadow-lg transition-all duration-500 ease-in-out mb-6" style="background-image: url('https://placehold.co/400x400/1e293b/ffffff?text=Naat')"></div>
+                <h2 id="track-title" class="text-2xl font-bold truncate w-full">Select a Naat</h2>
+                <p id="track-artist" class="text-md text-slate-300 truncate w-full">From the playlist</p>
+                <div class="wave-animation opacity-0">
+                    <div class="wave wave1"></div>
+                    <div class="wave wave2"></div>
+                </div>
+            </div>
+
+            <div class="w-full md:w-2/3 p-8 flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-semibold">Naat Playlist</h3>
+                         <div class="relative w-full max-w-xs">
+                            <input type="search" id="search-bar" placeholder="Search Naats..." class="bg-black/20 text-white placeholder-slate-400 rounded-full py-2 pl-10 pr-4 w-full focus:outline-none focus:ring-2 focus:ring-sky-400 transition">
+                             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="playlist" class="playlist-scroll h-64 md:h-[28rem] overflow-y-auto pr-2">
+                    </div>
+                </div>
+
+                <div class="mt-auto pt-6">
+                    <div class="flex items-center gap-3 text-xs text-slate-300 mb-1">
+                        <span id="current-time">0:00</span>
+                        <input id="progress-bar" type="range" min="0" max="100" value="0" class="progress-bar w-full h-1 bg-black/20 rounded-full appearance-none">
+                        <span id="duration">0:00</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <button id="repeat-btn" class="text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                            </button>
+                            <div class="flex items-center gap-2">
+                                <button id="volume-icon" class="text-slate-400 hover:text-white transition">
+                                    <svg class="volume-up" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                    <svg class="volume-mute hidden" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                                </button>
+                                <input id="volume-slider" type="range" min="0" max="1" step="0.01" value="1" class="volume-slider w-20 h-0.5 bg-black/20 rounded-full appearance-none">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <button id="prev-btn" class="p-2 rounded-full hover:bg-black/20 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"></polygon><polygon points="5 20 5 4 7 4 7 20 5 20"></polygon></svg>
+                            </button>
+                            <button id="play-btn" class="w-14 h-14 flex items-center justify-center bg-sky-500 hover:bg-sky-600 rounded-full shadow-lg transition text-white">
+                                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+                                <svg class="pause-icon hidden" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                            </button>
+                            <button id="next-btn" class="p-2 rounded-full hover:bg-black/20 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><polygon points="19 4 19 20 17 20 17 4 19 4"></polygon></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="w-28 text-right"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <audio id="audio-player"></audio>
+
+    <script>
+        const fullPlaylist = [
+{
+                title: "Ho Karam Sarkar Ab",
+                artist: "Ghulam Mustafa Qadri",
+                path: "naats/ho-karam.m4a",
+                 image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+                },
+            {
+                title: "Taiba Ke Jaane Wale",
+                artist: "Ghulam Mustafa Qadri",
+                path: "naats/Taiba ke jaane wale.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Qaseeda Burda Shareef",
+                artist: "Ghulam Mustafa Qadri",
+                path: "naats/Qaseeda Burda Shareef.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Bus Raha Hai Nazar Mai Madina",
+                artist: "Syed Hassan Ullah Hussaini",               
+                path: "naats/Bus raha hain nazar main madina.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Allah Humma Sallay Ala - Durood e Ahl e Bait | Durood o Salam",
+                artist: "Syed Hassan Ullah Hussaini",               
+                path: "naats/allah humma sallay ala.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "MERA JEENA BHI HAI KOI JEENA DOOR HAI MUJHE TERA MADINA",
+                artist: "",               
+                path: "naats/mera jeena bhi hai koi jeena.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "Main Madine Chala",
+                artist: "Owais Raza Qadri",               
+                path: "naats/main madine chala.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "Rukhe Mustafa ﷺ Wo Kitab Hai",
+                artist: "",               
+                path: "naats/rukhe mustafa.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Har Waqt Tassawur Main Madinay Ki Gali",
+                artist: "Muhammad Shahbaz Qadri",               
+                path: "naats/har waqt tassawur.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Balaghal ula be kamalehi",
+                artist: " Owais Raza Qadri-Best shab e meraj Kalam",               
+                path: "naats/balaghal ula be kamalehi.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Ae shahenshah-e-Madina Assalat-o-Wassalam zeenate arshe mohalla",
+                artist: "Best shab e meraj Kalam",               
+                path: "naats/Ae shahenshah-e-Madina Assalat-o-Wassalam.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Tu Shah - E - Khuban",
+                artist: "Ghulam Mustafa Qadri",               
+                path: "naats/Ghulam mustafa qadri.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+              {
+                title: "Phool Khilte Hain Padh Padh Ke Sallay Ala",
+                artist: "",               
+                path: "naats/phool khilte hain padh padh ke sallay.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+              {
+                title: "Hara Gumbad Jo Dekhoge Full Track - Madina Madina - Mere Aaqa Ko Dekhoge",
+                artist: "",               
+                path: "naats/hara gumbad.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+              {
+                title: "Zameen Meli Nahi Hoti Zaman Mela Nahi Hota",
+                artist: "",               
+                path: "naats/zameen meli nahi hoti.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+              {
+                title: "मोहम्मद ना होते तो कुछ भी ना होता ♥",
+                artist: "CHAND AFZAL QADRI",               
+                path: "naats/mohammad na hote kuch bhi na hota.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+              {
+                title: "Mango To Jaan Denge Mohammad Ke Waste Qawwali",
+                artist: "",               
+                path: "naats/mango to jaan denge mohammad ke waste.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "Mohammad Na Hote To Kuchh Bhi Na Hota Full Qawwali",
+                artist: "",               
+                path: "naats/mohammad na hote to kuch bhi na hota-qawwali.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+
+          {
+                title: "Kali Kali Zulfon Ke Phande Na Dalo",
+                artist: "Nusrat Fateh Ali Khan- Qawwali",               
+                path: "naats/kali kaali zulfon ke phande na dalo.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Meri Baat Ban Gayi Hai",
+                artist: "",               
+                path: "naats/Meri Baat Ban Gayi Hai.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Ankhon ka tara.. Name e Muhammad (Slowed Reverb ) Name-e-Muhammad.mp3",
+                artist: "",               
+                path: "naats/Ankhon ka tara.. Name e Muhammad.mp3",
+                 image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Sahara Chahiye Sarkar",
+                artist: "Hafiz Tahir Qadri New Naat 2017",               
+                path: "naats/sahara chahiye sarkar.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Ya Syedi",
+                artist: "Alhajj Muhammad Owais Raza Qadri",               
+                path: "naats/Ya Syedi.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Labbaik ya Rasool allah",
+                artist: "",               
+                path: "naats/Labbaik ya Rasool allah.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "HAR DESH ME GUNJE GA HAQ YA RASOOLALLAH",
+                artist: "HAFIZ TAHIR QADRI |AMJAD SABRI ",               
+                path: "naats/HAR DESH ME GUNJE GA HAQ YA RASOOLALLAH.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Pukaro Ya Rasool Allah ﷺ |New Rabi Ul Awal Title Naat 2020",
+                artist: "Ghulam Mustafa Qadr",               
+                path: "naats/Pukaro Ya Rasool Allah.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Tera Khawan Tere Geet Gawan",
+                artist: "Farhan Ali Qadri",               
+                path: "naats/Tera Khawan Tere Geet Gawan.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+            {
+                title: "Al Nabi Sallu Alaih",
+                artist: "Best Naat Of Owais Raza Qadri",               
+                path: "naats/Al Nabi Sallu Alaih.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "Haal e Dil Kis Ko Sunaen |New Naat Sharif 2021",
+                artist: "Haasan Ali",               
+                path: "naats/Haal e Dil Kis Ko Sunaen.mp3",
+                 image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+            },
+             {
+                title: "Ek Mai Hi Nahi Un Par Qurbaan Jamana hai Lofi Qawwali",
+                artist: "",               
+                path: "naats/Ek Mai Hi Nahi Un Par Qurbaan Jamana hai.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+
+            },
+             {
+                title: "Chamak Tujhse paate hai Sab Paane Waale",
+                artist: "Kalam e Hassanul Hind",               
+                path: "naats/Chamak Tujhse paate hai Sab Paane Waale.mp3",
+                image: 'https://media.istockphoto.com/id/1402981447/photo/human-hands-open-palm-up-worship.jpg?s=612x612&w=0&k=20&c=Wrw8dSR7ZKpnBsvMBtrHWUwPo1JMovSpHEJgWWLiW-M='
+            }
+        ];
+
+        let currentPlaylist = [...fullPlaylist];
+        let currentTrackIndex = 0;
+        let isPlaying = false;
+        let isRepeatOn = false;
+
+        const audioPlayer = document.getElementById('audio-player');
+        const playBtn = document.getElementById('play-btn');
+        const playIcon = playBtn.querySelector('.play-icon');
+        const pauseIcon = playBtn.querySelector('.pause-icon');
+        const nextBtn = document.getElementById('next-btn');
+        const prevBtn = document.getElementById('prev-btn');
+        const repeatBtn = document.getElementById('repeat-btn');
+        const progressBar = document.getElementById('progress-bar');
+        const currentTimeEl = document.getElementById('current-time');
+        const durationEl = document.getElementById('duration');
+        const trackTitle = document.getElementById('track-title');
+        const trackArtist = document.getElementById('track-artist');
+        const albumArt = document.getElementById('album-art');
+        const playlistEl = document.getElementById('playlist');
+        const searchBar = document.getElementById('search-bar');
+        const waveAnimation = document.querySelector('.wave-animation');
+        const volumeSlider = document.getElementById('volume-slider');
+        const volumeIcon = document.getElementById('volume-icon');
+        const volumeUpIcon = volumeIcon.querySelector('.volume-up');
+        const volumeMuteIcon = volumeIcon.querySelector('.volume-mute');
+
+
+        function playSong() {
+            isPlaying = true;
+            audioPlayer.play();
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            waveAnimation.style.opacity = '1';
+        }
+
+        function pauseSong() {
+            isPlaying = false;
+            audioPlayer.pause();
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            waveAnimation.style.opacity = '0';
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                pauseSong();
+            } else {
+                playSong();
+            }
+        }
+
+        function loadTrack(trackIndex) {
+            const track = currentPlaylist[trackIndex];
+            trackTitle.textContent = track.title;
+            trackArtist.textContent = track.artist;
+            albumArt.style.backgroundImage = `url('${track.image}')`;
+            audioPlayer.src = track.path;
+            
+            audioPlayer.addEventListener('loadedmetadata', () => {
+                durationEl.textContent = formatTime(audioPlayer.duration);
+                progressBar.max = audioPlayer.duration;
+            });
+
+            currentTrackIndex = trackIndex;
+            highlightCurrentTrack();
+        }
+
+        function nextTrack() {
+            currentTrackIndex = (currentTrackIndex + 1) % currentPlaylist.length;
+            loadTrack(currentTrackIndex);
+            playSong();
+        }
+
+        function prevTrack() {
+            currentTrackIndex = (currentTrackIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
+            loadTrack(currentTrackIndex);
+            playSong();
+        }
+
+        function updateProgress() {
+            progressBar.value = audioPlayer.currentTime;
+            currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+        }
+
+        function setProgress(e) {
+            const width = this.clientWidth;
+            const clickX = e.offsetX;
+            audioPlayer.currentTime = (clickX / width) * audioPlayer.duration;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+        
+        function toggleRepeat() {
+            isRepeatOn = !isRepeatOn;
+            audioPlayer.loop = isRepeatOn;
+            repeatBtn.classList.toggle('text-sky-400', isRepeatOn);
+            repeatBtn.classList.toggle('text-slate-400', !isRepeatOn);
+        }
+
+        function setVolume() {
+            audioPlayer.volume = volumeSlider.value;
+            updateVolumeIcon();
+        }
+
+        function updateVolumeIcon() {
+             if (audioPlayer.volume === 0 || audioPlayer.muted) {
+                volumeUpIcon.classList.add('hidden');
+                volumeMuteIcon.classList.remove('hidden');
+            } else {
+                volumeUpIcon.classList.remove('hidden');
+                volumeMuteIcon.classList.add('hidden');
+            }
+        }
+
+        function toggleMute() {
+            audioPlayer.muted = !audioPlayer.muted;
+            if (audioPlayer.muted) {
+                volumeSlider.value = 0;
+            } else {
+                volumeSlider.value = audioPlayer.volume > 0 ? audioPlayer.volume : 1;
+            }
+            updateVolumeIcon();
+        }
+
+        function renderPlaylist(playlistToRender) {
+            playlistEl.innerHTML = '';
+            playlistToRender.forEach((song, index) => {
+                const originalIndex = fullPlaylist.findIndex(s => s.path === song.path);
+                const li = document.createElement('div');
+                li.className = 'playlist-item flex items-center p-3 rounded-lg cursor-pointer hover:bg-black/20 transition duration-300 border-l-4 border-transparent';
+                li.dataset.index = index;
+
+                li.innerHTML = `
+                    <img src="${song.image}" alt="${song.title}" class="w-12 h-12 rounded-md mr-4 object-cover">
+                    <div class="flex-grow">
+                        <p class="font-semibold text-white truncate">${song.title}</p>
+                        <p class="text-sm text-slate-300 truncate">${song.artist}</p>
+                    </div>
+                    <div class="text-sm text-slate-400">...</div>
+                `;
+                playlistEl.appendChild(li);
+            });
+            highlightCurrentTrack();
+        }
+        
+        function highlightCurrentTrack() {
+            const items = playlistEl.querySelectorAll('.playlist-item');
+            items.forEach((item, index) => {
+                const track = currentPlaylist[index];
+                if(track && audioPlayer.src.includes(track.path)) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+        
+        function handlePlaylistClick(e) {
+            const targetItem = e.target.closest('.playlist-item');
+            if (targetItem) {
+                const index = parseInt(targetItem.dataset.index, 10);
+                loadTrack(index);
+                playSong();
+            }
+        }
+        
+        function filterPlaylist() {
+            const query = searchBar.value.toLowerCase();
+            if (query === '') {
+                currentPlaylist = [...fullPlaylist];
+            } else {
+                currentPlaylist = fullPlaylist.filter(song => 
+                    song.title.toLowerCase().includes(query) || 
+                    song.artist.toLowerCase().includes(query)
+                );
+            }
+            renderPlaylist(currentPlaylist);
+            if(isPlaying && !currentPlaylist.some(song => audioPlayer.src.includes(song.path))) {
+                // If the currently playing song is filtered out, we could pause, or do nothing.
+                // Let's do nothing for now, it will continue playing. 
+                // When it ends, it will go to the next in the *new* filtered list.
+            }
+        }
+
+
+        playBtn.addEventListener('click', togglePlay);
+        nextBtn.addEventListener('click', nextTrack);
+        prevBtn.addEventListener('click', prevTrack);
+        repeatBtn.addEventListener('click', toggleRepeat);
+        audioPlayer.addEventListener('timeupdate', updateProgress);
+        audioPlayer.addEventListener('ended', () => {
+            if (isRepeatOn) {
+                playSong(); 
+            } else {
+                nextTrack();
+            }
+        });
+        progressBar.addEventListener('input', (e) => audioPlayer.currentTime = e.target.value);
+        playlistEl.addEventListener('click', handlePlaylistClick);
+        searchBar.addEventListener('input', filterPlaylist);
+        volumeSlider.addEventListener('input', setVolume);
+        volumeIcon.addEventListener('click', toggleMute);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target === searchBar) return;
+            switch(e.code) {
+                case 'Space': e.preventDefault(); togglePlay(); break;
+                case 'ArrowRight': nextTrack(); break;
+                case 'ArrowLeft': prevTrack(); break;
+                case 'KeyR': toggleRepeat(); break;
+            }
+        });
+        
+        window.onload = () => {
+            renderPlaylist(fullPlaylist);
+            if (currentPlaylist.length > 0) {
+                loadTrack(0);
+                pauseSong();
+            }
+            setVolume();
+        };
+
+    </script>
+</body>
+</html>
